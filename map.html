@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>map test</title>
+    <link rel="stylesheet" href="/css/map.css">
+    <link rel="stylesheet" href="/css/toastui-chart.css">
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=default"></script>
+    <style>
+        /* Always set the map height explicitly to define the size of the div
+       * element that contains the map. */
+        #map {
+            height: 100%;
+        }
+
+        /* Optional: Makes the sample page fill the window. */
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+    <script src="/utils.js"></script>
+    <script src="/states"></script>
+    <script src="/js/toastui-chart.js"></script>
+    <script src="/js/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+
+<div class="box">
+    <div class="row header">
+        <select id="state-select" class="text"></select>
+        <script>
+
+            let select = $('#state-select').get(0);
+            states.forEach(state => {
+                let opt = document.createElement('option');
+                opt.value = state.id;
+                opt.innerHTML = state.name;
+                select.appendChild(opt);
+            });
+
+            select.value = "NY";
+        </script>
+        <select id="data-select" class="text">
+            <option value="vote">vote</option>
+            <option value="race">race</option>
+            <option value="none">none</option>
+        </select>
+        <span class="pipe">|</span>
+        <input type="button" class="text" value="counties" onclick="loadStateData('county')">
+        <input type="button" class="text" value="districts" onclick="loadStateData('district')">
+        <input type="button" class="text" value="tracts" onclick="loadStateData('tract')">
+        <input type="button" class="text" value="hybrid" onclick="loadStateData('hybrid')">
+        <span class="pipe">|</span>
+        <input type="button" class="text" value="overlay" onclick="loadOverlayData()">
+        <span class="pipe">|</span>
+        <input type="button" class="text" value="center" onclick="centerMap()"/>
+        <input type="button" class="text" value="reset" onclick="resetMap()"/>
+    </div>
+    <div id="map" class="row map"></div>
+    <div id="population" class="row footer">
+        <div class="container">
+            <div class="area">
+                <div class="info text">
+                    <div class="item name"><div class="info-name">Area:</div><div id="area-name" class="info-value"></div></div>
+                    <div class="item population"><div class="info-name">Population:</div><div id="area-population" class="info-value"></div></div>
+                    <div class="item population"><div class="info-name">White:</div><div id="area-white" class="info-value"></div></div>
+                    <div class="item population"><div class="info-name">Latino:</div><div id="area-latino" class="info-value"></div></div>
+                    <div class="item population"><div class="info-name">Black:</div><div id="area-black" class="info-value"></div></div>
+                    <div class="item population"><div class="info-name">Asian:</div><div id="area-asian" class="info-value"></div></div>
+                    <div class="item population"><div class="info-name">Native:</div><div id="area-native" class="info-value"></div></div>
+                </div>
+                <div id="area-vote-chart" class="chart"></div>
+            </div>
+            <div class="proposal">
+                <div class="divider"></div>
+                <div class="info text">
+                    <div class="item name"><div class="info-name">Proposal:</div><div id="proposal-name" class="info-value"></div></div>
+                    <div class="item population"><div class="info-name">Population:</div><div id="proposal-population" class="info-value"></div></div>
+                    <div class="item population"><div class="info-name">White:</div><div id="proposal-white" class="info-value"></div></div>
+                    <div class="item population"><div class="info-name">Latino:</div><div id="proposal-latino" class="info-value"></div></div>
+                    <div class="item population"><div class="info-name">Black:</div><div id="proposal-black" class="info-value"></div></div>
+                    <div class="item population"><div class="info-name">Asian:</div><div id="proposal-asian" class="info-value"></div></div>
+                    <div class="item population"><div class="info-name">Native:</div><div id="proposal-native" class="info-value"></div></div>
+                </div>
+                <div id="proposal-vote-chart" class="chart"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+
+    let map;
+    let layer;
+    let districtLayer;
+    let tractLayer;
+
+    let selectedFeatures = {};
+
+    const data = {
+        categories: ['Party'],
+        series: []
+    };
+
+    const theme = {
+        series: {
+            selectable: true,
+            colors: [ '#58ACFA', '#FA5858', '#A4A4A4'],
+            dataLabels: {
+                visible: true,
+                anchor: 'outer',
+                textStrokeColor: '#000000',
+                shadowColor: '#000000',
+                shadowBlur: 2,
+                pieSeriesName: {
+                    visible: true,
+                    fontFamily: 'Helvetica Neue',
+                    fontSize: 11
+                }
+            },
+        },
+    };
+
+    var options = {
+        chart: {title: false, width: 400, height: 300 },
+        legend: { visible: false },
+        exportMenu: { visible: false },
+        series: {
+            dataLabels: {
+                visible: true,
+                pieSeriesName: {visible: true, anchor: 'outer'},
+            },
+        },
+        theme,
+    };
+
+    const cel = $('#area-vote-chart').get(0);
+    const areaChart = toastui.Chart.pieChart({ el: cel, data: data, options: options });
+
+    const del = $('#proposal-vote-chart').get(0);
+    const proposalChart = toastui.Chart.pieChart( { el: del, data: data, options: options });
+
+    function resetMap() {
+
+        layer.forEach(feature => {
+            layer.remove(feature);
+        });
+        districtLayer.forEach(feature => {
+           districtLayer.remove(feature);
+        });
+        tractLayer.forEach(feature => {
+            tractLayer.remove(feature);
+        });
+
+        layer.setMap(map);
+        districtLayer.setMap(null);
+        tractLayer.setMap(null);
+
+        $('#area-name').html("");
+        $('#area-population').html("");
+        $('#area-white').html("");
+        $('#area-latino').html("");
+        $('#area-black').html("");
+        $('#area-asian').html("");
+        $('#area-native').html("");
+
+        $('#proposal-name').html("");
+        $('#proposal-population').html("");
+        $('#proposal-white').html("");
+        $('#proposal-latino').html("");
+        $('#proposal-black').html("");
+        $('#proposal-asian').html("");
+        $('#proposal-native').html("");
+
+        hideVotingChart(areaChart);
+        hideVotingChart(proposalChart);
+
+        selectedFeatures = {}
+    }
+
+    function centerMap() {
+        let state = $("#state-select").get(0).value;
+        states.forEach(s => {
+            if (s.id == state) {
+                map.setCenter({lat: parseFloat(s.lat), lng: parseFloat(s.lng)});
+            }
+        });
+    }
+
+    function loadAllCounties() {
+        resetMap();
+        let max = $("#county-max-population").get(0).value;
+        let url = '/counties/' + max;
+        layer.loadGeoJson(url)
+    }
+
+    function loadStateData(which) {
+        let state = $("#state-select").get(0).value;
+        let data = $("#data-select").get(0).value;
+        if (state == 'none') {
+            resetMap();
+            return;
+        }
+
+        let url = `/${which}/${state}/${data}`;
+        layer.loadGeoJson(url)
+    }
+
+    function loadOverlayData() {
+        let state = $("#state-select").get(0).value;
+
+        resetMap();
+
+        tractLayer.setStyle((feature) => {
+            let color = feature.getProperty("color");
+
+            return /** @type {!google.maps.Data.StyleOptions} */ {
+                fillColor: color,
+                strokeWeight: 1,
+                strokeColor: color,
+                zIndex: 1
+            };
+        });
+
+        districtLayer.setStyle((feature) => {
+            let color = feature.getProperty("color");
+
+            return /** @type {!google.maps.Data.StyleOptions} */ {
+                fillOpacity: 0,
+                strokeColor: color,
+                strokeWeight: 4,
+                zIndex: 2
+            };
+        });
+
+        let url = `/tract/${state}/race`;
+        tractLayer.loadGeoJson(`/tract/${state}/race`);
+        districtLayer.loadGeoJson(`/district/${state}/none`);
+
+        districtLayer.addListener("click", (event) => {
+            handleClick(districtLayer, event);
+        });
+
+        districtLayer.addListener("mouseover", (event) => {
+            handleMouseOver(districtLayer, event, "red");
+        });
+
+        districtLayer.addListener("mouseout", (event) => {
+            handleMouseOut(districtLayer, event);
+        });
+
+        layer.setMap(null);
+        districtLayer.setMap(map);
+        tractLayer.setMap(map);
+    }
+
+    function initMap() {
+        map = new google.maps.Map($("#map").get(0), {
+            zoom: 6,
+            center: new google.maps.LatLng(43.299428, -74.217933),
+        });
+
+        layer = new google.maps.Data();
+        tractLayer = new google.maps.Data();
+        districtLayer = new google.maps.Data();
+
+        layer.setStyle((feature) => {
+            let color = feature.getProperty("color");
+
+            return /** @type {!google.maps.Data.StyleOptions} */ {
+                fillColor: color,
+                strokeColor: color,
+                strokeWeight: 2,
+            };
+        });
+
+        layer.setMap(map);
+        tractLayer.setMap(null);
+        districtLayer.setMap(null);
+
+        layer.addListener("click", (event) => {
+            handleClick(layer, event);
+        });
+
+        layer.addListener("mouseover", (event) => {
+            handleMouseOver(layer, event);
+        });
+
+        layer.addListener("mouseout", (event) => {
+            handleMouseOut(layer, event);
+        });
+    }
+
+    function handleClick(data, event) {
+
+        let name = event.feature.getProperty("name");
+
+        if (name in selectedFeatures) {
+            data.revertStyle(event.feature);
+            delete selectedFeatures[name];
+        } else {
+            data.overrideStyle(event.feature, {strokeWeight: 8});
+            selectedFeatures[name] = event.feature;
+        }
+
+        if (Object.keys(selectedFeatures).length == 0) {
+            $('#proposal-name').html("");
+            $('#proposal-population').html("");
+            $('#proposal-white').html("");
+            $('#proposal-latino').html("");
+            $('#proposal-black').html("");
+            $('#proposal-asian').html("");
+            $('#proposal-native').html("");
+            hideVotingChart(proposalChart);
+        }
+
+        showProposal(event.feature, false);
+    }
+
+    function handleMouseOver(data, event, color=null) {
+
+        let name = event.feature.getProperty("name");
+
+        if (name in selectedFeatures) {
+            console.log(name + ' is already selected');
+        } else {
+            if (color) {
+                data.overrideStyle(event.feature, { strokeColor: color, strokeWeight: 8 });
+            }
+            else {
+                data.overrideStyle(event.feature, { strokeWeight: 8} );
+            }
+        }
+
+        let population = parseInt(event.feature.getProperty("population"));
+
+        $('#area-name').html(name);
+        $('#area-population').html(numberWithCommas(population));
+
+        let race = event.feature.getProperty("race");
+        if (race) {
+            $('#area-white').html(numberWithCommas(race[0]));
+            $('#area-latino').html(numberWithCommas(race[1]));
+            $('#area-black').html(numberWithCommas(race[2]));
+            $('#area-asian').html(numberWithCommas(race[3]));
+            $('#area-native').html(numberWithCommas(race[4]));
+            showRaceChart(areaChart, population, race)
+        }
+
+        let dem = event.feature.getProperty("dem");
+        if (dem) {
+            dem = parseFloat(dem);
+            let gop = parseFloat(event.feature.getProperty("gop"));
+            let und = 1.0 - (dem + gop);
+            showVotingChart(areaChart, dem, gop, und)
+        }
+    }
+
+    function handleMouseOut(data, event) {
+
+        let name = event.feature.getProperty("name");
+        if (name in selectedFeatures) {
+            console.log('leaving selected feature highlighted');
+        }
+        else {
+            data.revertStyle(event.feature);
+        }
+    }
+
+    function showProposal(feature, includeCurrent) {
+
+        let proposalPopulation = 0;
+        let proposalDem = 0.0;
+        let proposalGop = 0.0;
+        let proposalUnd = 0.0;
+        let proposalWhite = 0;
+        let proposalLatino = 0;
+        let proposalBlack = 0;
+        let proposalAsian = 0;
+        let proposalNative = 0;
+        let voteCount = 0;
+        let count = 1;
+        let und = 0.0
+
+        for (const [name, ft] of Object.entries(selectedFeatures)) {
+
+            let population = parseFloat(ft.getProperty("population"));
+            proposalPopulation += population;
+
+            let race = ft.getProperty("race");
+            if (race) {
+                proposalWhite += parseInt(race[0]);
+                proposalLatino += parseInt(race[1]);
+                proposalBlack += parseInt(race[2]);
+                proposalAsian += parseInt(race[3]);
+                proposalNative += parseInt(race[4]);
+            }
+
+            if (ft.getProperty('dem') != undefined) {
+
+                let dem = parseFloat(ft.getProperty("dem"));
+                let gop = parseFloat(ft.getProperty("gop"));
+                let und = 1.0 - (dem + gop);
+
+                proposalDem += (dem * population);
+                proposalGop += (gop * population);
+                proposalUnd += (und * population);
+
+                voteCount++;
+            }
+            count++;
+        }
+
+        let race = [proposalWhite, proposalLatino, proposalBlack, proposalAsian, proposalNative];
+
+        if (voteCount > 0) {
+
+            proposalDem = proposalDem / proposalPopulation;
+            proposalGop = proposalGop / proposalPopulation;
+            proposalUnd = proposalUnd / proposalPopulation;
+
+            showVotingChart(proposalChart, proposalDem, proposalGop, proposalUnd);
+        }
+        else {
+            showRaceChart(proposalChart, proposalPopulation, race);
+        }
+
+        if (count > 0) {
+            $('#proposal-population').html(numberWithCommas(proposalPopulation));
+            $('#proposal-white').html(numberWithCommas(race[0]));
+            $('#proposal-latino').html(numberWithCommas(race[1]));
+            $('#proposal-black').html(numberWithCommas(race[2]));
+            $('#proposal-asian').html(numberWithCommas(race[3]));
+            $('#proposal-native').html(numberWithCommas(race[4]));
+        }
+        else {
+            $('#proposal-population').html('');
+            $('#proposal-white').html('');
+            $('#proposal-latino').html('');
+            $('#proposal-black').html('');
+            $('#proposal-asian').html('');
+            $('#proposal-native').html('');
+            hideVotingChart(proposalChart);
+        }
+    }
+
+    function showRaceChart(chart, total, race) {
+
+        const white = race[0];
+        const latino = race[1];
+        const black = race[2];
+        const asian = race[3];
+        const native = race[4];
+        const other = total - (white + latino + black + asian + native);
+
+        const theme = {
+            series: {
+                selectable: true,
+                colors: [ 'gray', 'blue', 'black', 'yellow', 'red', 'purple'],
+                dataLabels: {
+                    visible: true,
+                    anchor: 'outer',
+                    textStrokeColor: '#000000',
+                    shadowColor: '#000000',
+                    shadowBlur: 2,
+                    pieSeriesName: {
+                        visible: true,
+                        fontFamily: 'Helvetica Neue',
+                        fontSize: 11
+                    }
+                },
+            },
+        };
+
+        options.theme = theme;
+        chart.setOptions(options);
+
+        const data = {
+            categories: ['Race'],
+            series: [
+                {
+                    name: 'White',
+                    data: white
+                },
+                {
+                    name: 'Latino',
+                    data: latino
+                },
+                {
+                    name: 'Black',
+                    data: black
+                },
+                {
+                    name: 'Asain',
+                    data: asian
+                },
+                {
+                    name: 'Native',
+                    data: native
+                },
+                {
+                    name: 'Other',
+                    data: other
+                }
+            ]
+        };
+
+        chart.setData(data)
+    }
+
+    function showVotingChart(chart, demPct, gopPct, undPct) {
+
+        const theme = {
+            series: {
+                selectable: true,
+                colors: [ '#58ACFA', '#FA5858', '#A4A4A4'],
+                dataLabels: {
+                    visible: true,
+                    anchor: 'outer',
+                    textStrokeColor: '#000000',
+                    shadowColor: '#000000',
+                    shadowBlur: 2,
+                    pieSeriesName: {
+                        visible: true,
+                        fontFamily: 'Helvetica Neue',
+                        fontSize: 11
+                    }
+                },
+            },
+        };
+
+        options.theme = theme;
+        chart.setOptions(options);
+
+        const data = {
+            categories: ['Party'],
+            series: [
+                {
+                    name: 'Democrat',
+                    data: demPct
+                },
+                {
+                    name: 'Republican',
+                    data: gopPct
+                },
+                {
+                    name: 'Undecided',
+                    data: undPct
+                }
+            ]
+        };
+
+        chart.setData(data)
+    }
+
+    function hideVotingChart(chart) {
+        const data = {
+            categories: [],
+            series: []
+        };
+
+        chart.setData(data)
+    }
+
+</script>
+
+<script async defer
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDDAJLUICuHi3rFxSKBbWmATVmxtVv8dSM&callback=initMap"
+        type="text/javascript"></script>
+
+</body>
+</html>

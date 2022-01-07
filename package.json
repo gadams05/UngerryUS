@@ -1,0 +1,29 @@
+{
+  "name": "ungerryus",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/badmeld/ungerryus.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/badmeld/ungerryus/issues"
+  },
+  "homepage": "https://github.com/badmeld/ungerryus#readme",
+  "dependencies": {
+    "chart.js": "^3.7.0",
+    "chartjs-plugin-labels": "^1.1.0",
+    "compression": "^1.7.4",
+    "express": "^4.17.2",
+    "mongodb": "^4.3.0",
+    "nodemon": "^2.0.15",
+    "sqlite3": "^5.0.2"
+  }
+}

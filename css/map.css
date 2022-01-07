@@ -1,0 +1,91 @@
+html,
+body {
+    height: 100%;
+    margin: 0;
+}
+
+.text {
+    font-family: "Helvetica Neue";
+    font-size: 11pt;
+}
+
+.box {
+    display: flex;
+    flex-flow: column;
+    height: 100%;
+}
+
+.box .row {
+    border: 1px dotted grey;
+}
+
+.box .row.header {
+    flex: 0 1 auto;
+    padding: 10px 10px 10px 10px;
+    /* The above is shorthand for:
+    flex-grow: 0,
+    flex-shrink: 1,
+    flex-basis: auto
+3   */
+}
+
+.box .row.map {
+    flex: 1 1 auto;
+}
+
+.box .row.footer {
+    flex: 0 1 200px;
+    align: center;
+}
+
+.container {  display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr;
+    gap: 0px 0px;
+    grid-auto-flow: row;
+    grid-template-areas:
+    "area proposal";
+}
+
+.area {  display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr;
+    gap: 0px 0px;
+    grid-auto-flow: row;
+    grid-template-areas:
+    "info chart";
+    grid-area: area;
+    padding: 10px;
+}
+.info { grid-area: info; font-family: "Helvetica Neue"; }
+
+.info-name { padding: 10px 20px 10px 10px; width: 70px; display: inline-block; background-color: #f2f2f2; }
+.info-value { padding: 10px; display: inline-block; }
+
+.chart { grid-area: chart; }
+
+.proposal {
+    display: grid;
+    grid-template-columns: 12px 1fr 1fr;
+    grid-template-rows: 1fr;
+    gap: 0px 0px;
+    grid-auto-flow: row;
+    grid-template-areas:
+    "divider info chart";
+    grid-area: proposal;
+    padding: 10px;
+}
+
+.divider {
+    padding: 0;
+    width: 2px;
+    height: 100%;
+    background-color: #f2f2f2;
+    grid-area: divider;
+}
+
+
+.pipe {
+    padding-left: 10px;
+    padding-right: 10px;
+}
